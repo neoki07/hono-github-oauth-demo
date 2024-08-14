@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { githubAuth } from "@hono/oauth-providers/github";
+import { setCookie } from "hono/cookie";
 
 type Bindings = {
+  SESSION_STORE_KV: KVNamespace;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
 };
@@ -10,16 +12,36 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 app.use("/auth/github/login", githubAuth({}));
 
-app.get("/auth/github/login", (c) => {
-  const token = c.get("token");
+app.get("/auth/github/login", async (c) => {
+  const accessToken = c.get("token");
   const refreshToken = c.get("refresh-token");
   const user = c.get("user-github");
 
-  return c.json({
-    token,
-    refreshToken,
-    user,
+  if (!user) {
+    return c.json({ error: "User not found" }, 401);
+  }
+
+  const ttl = 60 * 60 * 24;
+  const sessionId = crypto.randomUUID();
+  setCookie(c, "session_id", sessionId, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "None",
+    maxAge: ttl,
+    path: "/",
   });
+
+  const session = {
+    user,
+    accessToken,
+    refreshToken,
+  };
+
+  await c.env.SESSION_STORE_KV.put(sessionId, JSON.stringify(session), {
+    expirationTtl: ttl,
+  });
+
+  return c.text("Successfully logged in");
 });
 
 export default app;
