@@ -5,7 +5,7 @@ compatibility_date = "2024-08-13"
 # MY_VAR = "my-variable"
 
 [[kv_namespaces]]
-binding = "STORE_KV"
+binding = "SESSION_STORE_KV"
 id = "fb8cd148f0314d18b5d9ffee41dc2c4f"
 preview_id = "fb8cd148f0314d18b5d9ffee41dc2c4f"
 
