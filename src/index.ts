@@ -70,12 +70,6 @@ app
   .get("/auth/github/login", async (c) => {
     const store = c.env.SESSION_STORE_KV;
 
-    const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
-    if (oldSessionId) {
-      deleteCookie(c, SESSION_ID_COOKIE_KEY);
-      await deleteSessionFromStore(oldSessionId, store);
-    }
-
     const accessToken = c.get("token");
     const refreshToken = c.get("refresh-token");
     const user = c.get("user-github");
@@ -88,8 +82,13 @@ app
       return c.json({ error: "Access token or refresh token not found" }, 401);
     }
 
-    const sessionId = crypto.randomUUID();
-    setCookie(c, SESSION_ID_COOKIE_KEY, sessionId, {
+    const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
+    if (oldSessionId) {
+      await deleteSessionFromStore(oldSessionId, store);
+    }
+
+    const newSessionId = crypto.randomUUID();
+    setCookie(c, SESSION_ID_COOKIE_KEY, newSessionId, {
       httpOnly: true,
       secure: true,
       sameSite: "None",
@@ -103,7 +102,7 @@ app
       refreshToken,
     };
 
-    await setSessionToStore(sessionId, session, store, {
+    await setSessionToStore(newSessionId, session, store, {
       expirationTtl: SESSION_TTL,
     });
 
