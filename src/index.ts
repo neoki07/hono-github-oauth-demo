@@ -57,13 +57,13 @@ const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
   async (c, next) => {
     const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!sessionId) {
-      return c.text("Not logged in", 401);
+      return c.json({ error: { message: "Unauthorized" } }, 401);
     }
 
     const store = getSessionStore(c);
     const session = await getSessionFromStore(sessionId, store);
     if (!session) {
-      return c.text("Not logged in", 401);
+      return c.json({ error: { message: "Unauthorized" } }, 401);
     }
 
     await next();
@@ -82,12 +82,8 @@ app
     const refreshToken = c.get("refresh-token");
     const user = c.get("user-github");
 
-    if (!user) {
-      return c.json({ error: "User not found" }, 401);
-    }
-
-    if (!accessToken || !refreshToken) {
-      return c.json({ error: "Access token or refresh token not found" }, 401);
+    if (!user || !accessToken || !refreshToken) {
+      return c.json({ error: { message: "Failed to login" } }, 400);
     }
 
     const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
@@ -114,20 +110,20 @@ app
       expirationTtl: SESSION_TTL,
     });
 
-    return c.text("Successfully logged in");
+    return c.json({ message: "Successfully logged in" });
   })
   .get("/auth/logout", async (c) => {
     const store = getSessionStore(c);
 
     const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!sessionId) {
-      return c.text("Not logged in", 401);
+      return c.json({ error: { message: "Not logged in" } }, 400);
     }
 
     deleteCookie(c, SESSION_ID_COOKIE_KEY);
     await deleteSessionFromStore(sessionId, store);
 
-    return c.text("Successfully logged out");
+    return c.json({ message: "Successfully logged out" });
   })
   .get("/me", authMiddleware, async (c) => {
     const store = getSessionStore(c);
@@ -135,7 +131,7 @@ app
     const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY)!;
     const session = await getSessionFromStore(sessionId, store);
     if (!session?.user) {
-      return c.text("Not logged in", 401);
+      return c.json({ error: { message: "Failed to get user" } }, 400);
     }
 
     return c.json({ user: session.user });
