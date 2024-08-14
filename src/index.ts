@@ -21,6 +21,10 @@ type Session = {
   refreshToken: Token;
 };
 
+function createSessionId() {
+  return crypto.randomUUID();
+}
+
 async function getSessionFromStore(
   sessionId: string,
   store: KVNamespace<string>
@@ -87,7 +91,7 @@ app
       await deleteSessionFromStore(oldSessionId, store);
     }
 
-    const newSessionId = crypto.randomUUID();
+    const newSessionId = createSessionId();
     setCookie(c, SESSION_ID_COOKIE_KEY, newSessionId, {
       httpOnly: true,
       secure: true,
