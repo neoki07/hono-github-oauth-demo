@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Context, Hono } from "hono";
 import { githubAuth, GitHubUser } from "@hono/oauth-providers/github";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
@@ -20,6 +20,10 @@ type Session = {
   accessToken: Token;
   refreshToken: Token;
 };
+
+function getSessionStore(c: Context<{ Bindings: Bindings }>) {
+  return c.env.SESSION_STORE_KV;
+}
 
 function createSessionId() {
   return crypto.randomUUID();
@@ -56,7 +60,7 @@ const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
       return c.text("Not logged in", 401);
     }
 
-    const store = c.env.SESSION_STORE_KV;
+    const store = getSessionStore(c);
     const session = await getSessionFromStore(sessionId, store);
     if (!session) {
       return c.text("Not logged in", 401);
@@ -72,7 +76,7 @@ app.use("/auth/github/login", githubAuth({}));
 
 app
   .get("/auth/github/login", async (c) => {
-    const store = c.env.SESSION_STORE_KV;
+    const store = getSessionStore(c);
 
     const accessToken = c.get("token");
     const refreshToken = c.get("refresh-token");
@@ -113,7 +117,7 @@ app
     return c.text("Successfully logged in");
   })
   .get("/auth/logout", async (c) => {
-    const store = c.env.SESSION_STORE_KV;
+    const store = getSessionStore(c);
 
     const session = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!session) {
@@ -126,7 +130,7 @@ app
     return c.text("Successfully logged out");
   })
   .get("/me", authMiddleware, async (c) => {
-    const store = c.env.SESSION_STORE_KV;
+    const store = getSessionStore(c);
 
     const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY)!;
     const session = await getSessionFromStore(sessionId, store);
