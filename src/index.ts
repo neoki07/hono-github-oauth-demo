@@ -4,8 +4,6 @@ import { setCookie } from "hono/cookie";
 
 type Bindings = {
   SESSION_STORE_KV: KVNamespace;
-  GITHUB_CLIENT_ID: string;
-  GITHUB_CLIENT_SECRET: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
