@@ -1,10 +1,27 @@
 import { Hono } from "hono";
 import { githubAuth } from "@hono/oauth-providers/github";
 import { getCookie, setCookie } from "hono/cookie";
+import { createMiddleware } from "hono/factory";
 
 type Bindings = {
   SESSION_STORE_KV: KVNamespace;
 };
+
+const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
+  async (c, next) => {
+    const sessionId = getCookie(c, "session_id");
+    if (!sessionId) {
+      return c.text("Not logged in", 401);
+    }
+
+    const session = await c.env.SESSION_STORE_KV.get(sessionId);
+    if (!session) {
+      return c.text("Not logged in", 401);
+    }
+
+    await next();
+  }
+);
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -70,6 +87,16 @@ app
     await c.env.SESSION_STORE_KV.delete(session);
 
     return c.text("Successfully logged out");
+  })
+  .get("/me", authMiddleware, async (c) => {
+    const sessionId = getCookie(c, "session_id")!;
+    const session = await c.env.SESSION_STORE_KV.get(sessionId);
+    const parsedSession = JSON.parse(session!);
+    if (!parsedSession.user) {
+      return c.text("Not logged in", 401);
+    }
+
+    return c.json({ user: parsedSession.user });
   });
 
 export default app;
