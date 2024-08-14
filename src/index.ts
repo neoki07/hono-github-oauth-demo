@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { githubAuth } from "@hono/oauth-providers/github";
-import { getCookie, setCookie } from "hono/cookie";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
 
 type Bindings = {
@@ -34,12 +34,7 @@ app
   .get("/auth/github/login", async (c) => {
     const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (oldSessionId) {
-      setCookie(c, SESSION_ID_COOKIE_KEY, "", {
-        httpOnly: true,
-        secure: true,
-        sameSite: "None",
-        maxAge: 0,
-      });
+      deleteCookie(c, SESSION_ID_COOKIE_KEY);
 
       await c.env.SESSION_STORE_KV.delete(oldSessionId);
     }
@@ -79,13 +74,7 @@ app
       return c.text("Not logged in", 401);
     }
 
-    setCookie(c, SESSION_ID_COOKIE_KEY, "", {
-      httpOnly: true,
-      secure: true,
-      sameSite: "None",
-      maxAge: 0,
-    });
-
+    deleteCookie(c, SESSION_ID_COOKIE_KEY);
     await c.env.SESSION_STORE_KV.delete(session);
 
     return c.text("Successfully logged out");
