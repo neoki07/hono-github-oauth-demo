@@ -119,13 +119,13 @@ app
   .get("/auth/logout", async (c) => {
     const store = getSessionStore(c);
 
-    const session = getCookie(c, SESSION_ID_COOKIE_KEY);
-    if (!session) {
+    const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
+    if (!sessionId) {
       return c.text("Not logged in", 401);
     }
 
     deleteCookie(c, SESSION_ID_COOKIE_KEY);
-    await deleteSessionFromStore(session, store);
+    await deleteSessionFromStore(sessionId, store);
 
     return c.text("Successfully logged out");
   })
