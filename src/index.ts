@@ -8,10 +8,11 @@ type Bindings = {
 };
 
 const SESSION_TTL = 60 * 60 * 24;
+const SESSION_ID_COOKIE_KEY = "session_id";
 
 const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
   async (c, next) => {
-    const sessionId = getCookie(c, "session_id");
+    const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!sessionId) {
       return c.text("Not logged in", 401);
     }
@@ -31,9 +32,9 @@ app.use("/auth/github/login", githubAuth({}));
 
 app
   .get("/auth/github/login", async (c) => {
-    const oldSessionId = getCookie(c, "session_id");
+    const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (oldSessionId) {
-      setCookie(c, "session_id", "", {
+      setCookie(c, SESSION_ID_COOKIE_KEY, "", {
         httpOnly: true,
         secure: true,
         sameSite: "None",
@@ -52,7 +53,7 @@ app
     }
 
     const sessionId = crypto.randomUUID();
-    setCookie(c, "session_id", sessionId, {
+    setCookie(c, SESSION_ID_COOKIE_KEY, sessionId, {
       httpOnly: true,
       secure: true,
       sameSite: "None",
@@ -73,12 +74,12 @@ app
     return c.text("Successfully logged in");
   })
   .get("/auth/logout", async (c) => {
-    const session = getCookie(c, "session_id");
+    const session = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!session) {
       return c.text("Not logged in", 401);
     }
 
-    setCookie(c, "session_id", "", {
+    setCookie(c, SESSION_ID_COOKIE_KEY, "", {
       httpOnly: true,
       secure: true,
       sameSite: "None",
@@ -90,7 +91,7 @@ app
     return c.text("Successfully logged out");
   })
   .get("/me", authMiddleware, async (c) => {
-    const sessionId = getCookie(c, "session_id")!;
+    const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY)!;
     const session = await c.env.SESSION_STORE_KV.get(sessionId);
     const parsedSession = JSON.parse(session!);
     if (!parsedSession.user) {
