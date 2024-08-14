@@ -7,6 +7,8 @@ type Bindings = {
   SESSION_STORE_KV: KVNamespace;
 };
 
+const SESSION_TTL = 60 * 60 * 24;
+
 const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
   async (c, next) => {
     const sessionId = getCookie(c, "session_id");
@@ -49,13 +51,12 @@ app
       return c.json({ error: "User not found" }, 401);
     }
 
-    const ttl = 60 * 60 * 24;
     const sessionId = crypto.randomUUID();
     setCookie(c, "session_id", sessionId, {
       httpOnly: true,
       secure: true,
       sameSite: "None",
-      maxAge: ttl,
+      maxAge: SESSION_TTL,
       path: "/",
     });
 
@@ -66,7 +67,7 @@ app
     };
 
     await c.env.SESSION_STORE_KV.put(sessionId, JSON.stringify(session), {
-      expirationTtl: ttl,
+      expirationTtl: SESSION_TTL,
     });
 
     return c.text("Successfully logged in");
