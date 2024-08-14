@@ -1,14 +1,49 @@
 import { Hono } from "hono";
-import { githubAuth } from "@hono/oauth-providers/github";
+import { githubAuth, GitHubUser } from "@hono/oauth-providers/github";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { createMiddleware } from "hono/factory";
+
+const SESSION_TTL = 60 * 60 * 24;
+const SESSION_ID_COOKIE_KEY = "session_id";
 
 type Bindings = {
   SESSION_STORE_KV: KVNamespace;
 };
 
-const SESSION_TTL = 60 * 60 * 24;
-const SESSION_ID_COOKIE_KEY = "session_id";
+type Token = {
+  token: string;
+  expires_in: number;
+};
+
+type Session = {
+  user: Partial<GitHubUser>;
+  accessToken: Token;
+  refreshToken: Token;
+};
+
+async function getSessionFromStore(
+  sessionId: string,
+  store: KVNamespace<string>
+): Promise<Session | undefined> {
+  const session = await store.get(sessionId);
+  return session ? JSON.parse(session) : undefined;
+}
+
+async function setSessionToStore(
+  sessionId: string,
+  session: Session,
+  store: KVNamespace<string>,
+  options?: KVNamespacePutOptions
+) {
+  await store.put(sessionId, JSON.stringify(session), options);
+}
+
+async function deleteSessionFromStore(
+  sessionId: string,
+  store: KVNamespace<string>
+) {
+  await store.delete(sessionId);
+}
 
 const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
   async (c, next) => {
@@ -17,7 +52,8 @@ const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
       return c.text("Not logged in", 401);
     }
 
-    const session = await c.env.SESSION_STORE_KV.get(sessionId);
+    const store = c.env.SESSION_STORE_KV;
+    const session = await getSessionFromStore(sessionId, store);
     if (!session) {
       return c.text("Not logged in", 401);
     }
@@ -32,11 +68,12 @@ app.use("/auth/github/login", githubAuth({}));
 
 app
   .get("/auth/github/login", async (c) => {
+    const store = c.env.SESSION_STORE_KV;
+
     const oldSessionId = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (oldSessionId) {
       deleteCookie(c, SESSION_ID_COOKIE_KEY);
-
-      await c.env.SESSION_STORE_KV.delete(oldSessionId);
+      await deleteSessionFromStore(oldSessionId, store);
     }
 
     const accessToken = c.get("token");
@@ -45,6 +82,10 @@ app
 
     if (!user) {
       return c.json({ error: "User not found" }, 401);
+    }
+
+    if (!accessToken || !refreshToken) {
+      return c.json({ error: "Access token or refresh token not found" }, 401);
     }
 
     const sessionId = crypto.randomUUID();
@@ -56,38 +97,41 @@ app
       path: "/",
     });
 
-    const session = {
+    const session: Session = {
       user,
       accessToken,
       refreshToken,
     };
 
-    await c.env.SESSION_STORE_KV.put(sessionId, JSON.stringify(session), {
+    await setSessionToStore(sessionId, session, store, {
       expirationTtl: SESSION_TTL,
     });
 
     return c.text("Successfully logged in");
   })
   .get("/auth/logout", async (c) => {
+    const store = c.env.SESSION_STORE_KV;
+
     const session = getCookie(c, SESSION_ID_COOKIE_KEY);
     if (!session) {
       return c.text("Not logged in", 401);
     }
 
     deleteCookie(c, SESSION_ID_COOKIE_KEY);
-    await c.env.SESSION_STORE_KV.delete(session);
+    await deleteSessionFromStore(session, store);
 
     return c.text("Successfully logged out");
   })
   .get("/me", authMiddleware, async (c) => {
+    const store = c.env.SESSION_STORE_KV;
+
     const sessionId = getCookie(c, SESSION_ID_COOKIE_KEY)!;
-    const session = await c.env.SESSION_STORE_KV.get(sessionId);
-    const parsedSession = JSON.parse(session!);
-    if (!parsedSession.user) {
+    const session = await getSessionFromStore(sessionId, store);
+    if (!session?.user) {
       return c.text("Not logged in", 401);
     }
 
-    return c.json({ user: parsedSession.user });
+    return c.json({ user: session.user });
   });
 
 export default app;
