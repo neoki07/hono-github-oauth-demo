@@ -8,6 +8,8 @@ const SESSION_ID_COOKIE_KEY = "session_id";
 
 type Bindings = {
   SESSION_STORE_KV: KVNamespace;
+  GITHUB_ID: string;
+  GITHUB_SECRET: string;
 };
 
 type Token = {
@@ -67,7 +69,51 @@ const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
     }
 
     if (session.accessToken.expirationTime < Date.now()) {
-      return c.json({ error: { message: "Unauthorized" } }, 401);
+      if (session.refreshToken.expirationTime < Date.now()) {
+        return c.json({ error: { message: "Unauthorized" } }, 401);
+      }
+
+      const response = await fetch(
+        "https://github.com/login/oauth/access_token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            client_id: c.env.GITHUB_ID,
+            client_secret: c.env.GITHUB_SECRET,
+            grant_type: "refresh_token",
+            refresh_token: session.refreshToken.token,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        return c.json({ error: { message: "Failed to refresh token" } }, 400);
+      }
+
+      const responseText = await response.text();
+      const responseParams = new URLSearchParams(responseText);
+
+      const newSession = {
+        ...session,
+        accessToken: {
+          token: responseParams.get("access_token")!,
+          expirationTime:
+            Date.now() + Number(responseParams.get("expires_in")) * 1000,
+        },
+        refreshToken: {
+          token: responseParams.get("refresh_token")!,
+          expirationTime:
+            Date.now() +
+            Number(responseParams.get("refresh_token_expires_in")) * 1000,
+        },
+      };
+
+      await setSessionToStore(sessionId, newSession, store, {
+        expirationTtl: SESSION_TTL,
+      });
     }
 
     await next();
