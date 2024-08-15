@@ -12,7 +12,7 @@ type Bindings = {
 
 type Token = {
   token: string;
-  expires_in: number;
+  expirationTime: number;
 };
 
 type Session = {
@@ -66,6 +66,10 @@ const authMiddleware = createMiddleware<{ Bindings: Bindings }>(
       return c.json({ error: { message: "Unauthorized" } }, 401);
     }
 
+    if (session.accessToken.expirationTime < Date.now()) {
+      return c.json({ error: { message: "Unauthorized" } }, 401);
+    }
+
     await next();
   }
 );
@@ -102,8 +106,14 @@ app
 
     const session: Session = {
       user,
-      accessToken,
-      refreshToken,
+      accessToken: {
+        token: accessToken.token,
+        expirationTime: Date.now() + accessToken.expires_in * 1000,
+      },
+      refreshToken: {
+        token: refreshToken.token,
+        expirationTime: Date.now() + refreshToken.expires_in * 1000,
+      },
     };
 
     await setSessionToStore(newSessionId, session, store, {
